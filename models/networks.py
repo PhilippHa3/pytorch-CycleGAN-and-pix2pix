@@ -325,7 +325,7 @@ class NASGenerator(nn.Module):
         n_downsampling = 2
         for i in range(n_downsampling):  # add downsampling layers
             mult = 2 ** i
-            print(f"{i} downsampling with input {ngf*mult} and output {ngf*mult*2}")
+            # print(f"{i} downsampling with input {ngf*mult} and output {ngf*mult*2}")
             downsampling += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1, bias=use_bias),
                       norm_layer(ngf * mult * 2),
                       nn.ReLU(True)]
@@ -340,7 +340,7 @@ class NASGenerator(nn.Module):
         print(f"cell_weights: {self.cell_weights}")
 
         layers = []
-        for i in range(n_blocks)
+        for i in range(n_blocks):
             for layer_type in layer_types
                 layers += self.layer_type_encoder(layer_type, mult*ngf)
 
