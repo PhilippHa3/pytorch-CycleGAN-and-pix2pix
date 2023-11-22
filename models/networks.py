@@ -314,6 +314,7 @@ class NASGenerator(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect'):
         assert(n_blocks >= 0)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         super(NASGenerator, self).__init__()
 
         use_bias = False
@@ -334,11 +335,15 @@ class NASGenerator(nn.Module):
         mult = 2 ** n_downsampling
     
         # add other layer types with size: [1, 256, 64, 64]
-        self.layer_types = ['conv_2d', 'linear']
-        self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(self.layer_types))
+        self.layer_types = ['conv_2d', 'pool_2d']
+        # self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(self.layer_types))
         self.nr_layer = n_blocks
         # print(f"cell_weights size: {self.cell_weights.size()}")
         # print(f"cell_weights: {self.cell_weights}")
+
+        cell_weights = F.softmax(torch.ones([n_blocks, len(self.layer_types)]), dim=-1)
+        cell_weights = cell_weights.to(torch.float64)
+        self.cell_weights = nn.Parameter(cell_weights, requires_grad=True)
 
         layers = []
         for i in range(n_blocks):
@@ -377,14 +382,13 @@ class NASGenerator(nn.Module):
         count = 0
         values = [out]
 
+        print("forward call")
 
         for i in range(self.nr_layer):
             temp_layer_value = torch.zeros(list(out.size()))
-            #temp = temp.to(self.device)
+            temp_layer_value = temp_layer_value.to(self.device)
             for j in range(len(self.layer_types)):
-                print(f"i: {i}, j: {j}")
-                print(f"count: {count}, j: {j}")
-                temp_layer_value = temp_layer_value + self.layers[count+j](values[-1]) * F.softmax(self.cell_weigts, dim=-1)[i, j]
+                temp_layer_value = temp_layer_value + self.layers[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
             values.append(temp_layer_value)
             count += len(self.layer_types)
 
@@ -401,7 +405,10 @@ class NASGenerator(nn.Module):
                     nn.ReLU()
                 )
             case 'pool_2d':
-                ...
+                return nn.Sequential(
+                    nn.MaxPool2d(2, 1, padding=1),
+                    nn.ReLU()
+                )
             case 'linear':
                 return nn.Sequential(
                     Resized_Linear(dim, dim, False),
@@ -688,14 +695,17 @@ class NLayerDiscriminator(nn.Module):
         return self.model(input)
 
 
+# TODO: does not work, is it even necessary?
 class Resized_Linear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, bias: bool) -> None:
         super().__init__(in_features, out_features, bias=bias)
 
     def forward(self, input):
+        print(f"Resized_linear: {input.shape}")
         shape = input.shape
         flatten = nn.Flatten()
         input = flatten(input)
 
         x = super().forward(input)
+        print(f"Resized Linear: {x.shape}")
         return torch.as_tensor(x.reshape(shape))
