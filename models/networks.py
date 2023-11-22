@@ -311,9 +311,11 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
 class NASGenerator(nn.Module):
     
-    def __init__(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect'):
         assert(n_blocks >= 0)
+        super(NASGenerator, self).__init__()
 
+        use_bias = False
 
         downsampling = [nn.ReflectionPad2d(3),
                  nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
@@ -323,13 +325,24 @@ class NASGenerator(nn.Module):
         n_downsampling = 2
         for i in range(n_downsampling):  # add downsampling layers
             mult = 2 ** i
+            print(f"{i} downsampling with input {ngf*mult} and output {ngf*mult*2}")
             downsampling += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1, bias=use_bias),
                       norm_layer(ngf * mult * 2),
                       nn.ReLU(True)]
         
+        mult = 2 ** n_downsampling
     
-        print(f"nfg*mult vor ResNet {nfg*mult}")
-        # add other layer types
+        # add other layer types with size: [1, 256, 64, 64]
+        layer_types = ['conv_2d', 'linear']
+        self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(layer_types))
+
+        print(f"cell_weights size: {self.cell_weights.size()}")
+        print(f"cell_weights: {self.cell_weights}")
+
+        layers = []
+        for i in range(n_blocks)
+            for layer_type in layer_types
+                layers += self.layer_type_encoder(layer_type, mult*ngf)
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
@@ -345,31 +358,47 @@ class NASGenerator(nn.Module):
         upsampling += [nn.Tanh()]
 
         self.downsampling = nn.Sequential(*downsampling)
+        self.layers = nn.Sequential(*layers)
         self.upsampling = nn.Sequential(*upsampling)
 
-        for param in downsampling.features.parameters():
+        #for param in self.downsampling.features.parameters():
+        #    param.requires_grad = False
+
+        for param in self.upsampling.features.parameters():
             param.requires_grad = False
 
-        for param in upsampling.features.parameters():
-            param.requires_grad = False
 
-
-    def forward(self, input)
-        print(f"forward: input size: {input.size()}")
+    def forward(self, input):
+        #print(f"forward: input size: {input.size()}")
         out = self.downsampling(input)
-        print(f"forward: downsampling size: {out.size()}")
-        out = self.upsampling(input)
-        print(f"forward: upsampling size: {out.size()}")
+        #print(f"forward: downsampling size: {out.size()}")
+
+
+
+        out = self.upsampling(out)
+        #print(f"forward: upsampling size: {out.size()}")
         return out
         
-    def layer_type_encoder(self, layer_type):
+    def layer_type_encoder(self, layer_type, dim):
         match layer_type:
             case 'conv_2d':
-                ...
+                return nn.Sequential(
+                    nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
+                    nn.ReLU()
+                )
             case 'pool_2d':
                 ...
             case 'linear':
-                ...
+                return nn.Sequential(
+                    Resized_Linear(dim, dim, False),
+                    nn.ReLU()
+                )
+
+    def gen_layer_weights(self, nr_layer, nr_layer_types):
+        cell_weights = F.softmax(torch.ones([nr_layer, nr_layer_types]), dim=-1)
+        cell_weights = cell_weights.to(torch.float64)
+        cell_weights = nn.Parameter(cell_weights, requires_grad=True)
+        return cell_weights
 
 
 class ResnetGenerator(nn.Module):
@@ -644,3 +673,15 @@ class NLayerDiscriminator(nn.Module):
         """Standard forward."""
         return self.model(input)
 
+
+class Resized_Linear(nn.Linear):
+    def __init__(self, in_features: int, out_features: int, bias: bool) -> None:
+        super().__init__(in_features, out_features, bias=bias)
+
+    def forward(self, input):
+        shape = input.shape
+        flatten = nn.Flatten()
+        input = flatten(input)
+
+        x = super().forward(input)
+        return torch.as_tensor(x.reshape(shape))
