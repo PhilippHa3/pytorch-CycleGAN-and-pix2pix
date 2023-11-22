@@ -149,12 +149,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
 
     if netG == 'resnet_9blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
-    elif netG == 'resnet_6blocks':
-        net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
-    elif netG == 'unet_128':
-        net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
-    elif netG == 'unet_256':
-        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'NAS':
+        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -313,23 +309,86 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
         return 0.0, None
 
 
+class NASGenerator(nn.Module):
+    
+    def __init__(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3):
+        assert(n_blocks >= 0)
+
+
+        downsampling = [nn.ReflectionPad2d(3),
+                 nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
+                 norm_layer(ngf),
+                 nn.ReLU(True)]
+
+        n_downsampling = 2
+        for i in range(n_downsampling):  # add downsampling layers
+            mult = 2 ** i
+            downsampling += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1, bias=use_bias),
+                      norm_layer(ngf * mult * 2),
+                      nn.ReLU(True)]
+        
+    
+        print(f"nfg*mult vor ResNet {nfg*mult}")
+        # add other layer types
+
+        upsampling = []
+        for i in range(n_downsampling):  # add upsampling layers
+            mult = 2 ** (n_downsampling - i)
+            upsampling += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2),
+                                         kernel_size=3, stride=2,
+                                         padding=1, output_padding=1,
+                                         bias=use_bias),
+                      norm_layer(int(ngf * mult / 2)),
+                      nn.ReLU(True)]
+        upsampling += [nn.ReflectionPad2d(3)]
+        upsampling += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
+        upsampling += [nn.Tanh()]
+
+        self.downsampling = nn.Sequential(*downsampling)
+        self.upsampling = nn.Sequential(*upsampling)
+
+        for param in downsampling.features.parameters():
+            param.requires_grad = False
+
+        for param in upsampling.features.parameters():
+            param.requires_grad = False
+
+
+    def forward(self, input)
+        print(f"forward: input size: {input.size()}")
+        out = self.downsampling(input)
+        print(f"forward: downsampling size: {out.size()}")
+        out = self.upsampling(input)
+        print(f"forward: upsampling size: {out.size()}")
+        return out
+        
+    def layer_type_encoder(self, layer_type):
+        match layer_type:
+            case 'conv_2d':
+                ...
+            case 'pool_2d':
+                ...
+            case 'linear':
+                ...
+
+
 class ResnetGenerator(nn.Module):
     """Resnet-based generator that consists of Resnet blocks between a few downsampling/upsampling operations.
 
-    We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
+        We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
     """
 
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect'):
         """Construct a Resnet-based generator
 
-        Parameters:
-            input_nc (int)      -- the number of channels in input images
-            output_nc (int)     -- the number of channels in output images
-            ngf (int)           -- the number of filters in the last conv layer
-            norm_layer          -- normalization layer
-            use_dropout (bool)  -- if use dropout layers
-            n_blocks (int)      -- the number of ResNet blocks
-            padding_type (str)  -- the name of padding layer in conv layers: reflect | replicate | zero
+            Parameters:
+                input_nc (int)      -- the number of channels in input images
+                output_nc (int)     -- the number of channels in output images
+                ngf (int)           -- the number of filters in the last conv layer
+                norm_layer          -- normalization layer
+                use_dropout (bool)  -- if use dropout layers
+                n_blocks (int)      -- the number of ResNet blocks
+                padding_type (str)  -- the name of padding layer in conv layers: reflect | replicate | zero
         """
         #n_blocks = 1
         assert(n_blocks >= 0)
@@ -352,6 +411,7 @@ class ResnetGenerator(nn.Module):
                       nn.ReLU(True)]
 
         mult = 2 ** n_downsampling
+
         for i in range(n_blocks):       # add ResNet blocks
 
             model += [ResnetBlock(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
@@ -381,10 +441,10 @@ class ResnetBlock(nn.Module):
     def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias):
         """Initialize the Resnet block
 
-        A resnet block is a conv block with skip connections
-        We construct a conv block with build_conv_block function,
-        and implement skip connections in <forward> function.
-        Original Resnet paper: https://arxiv.org/pdf/1512.03385.pdf
+            A resnet block is a conv block with skip connections
+            We construct a conv block with build_conv_block function,
+            and implement skip connections in <forward> function.
+            Original Resnet paper: https://arxiv.org/pdf/1512.03385.pdf
         """
         super(ResnetBlock, self).__init__()
         self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, use_bias)
@@ -392,14 +452,14 @@ class ResnetBlock(nn.Module):
     def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
         """Construct a convolutional block.
 
-        Parameters:
-            dim (int)           -- the number of channels in the conv layer.
-            padding_type (str)  -- the name of padding layer: reflect | replicate | zero
-            norm_layer          -- normalization layer
-            use_dropout (bool)  -- if use dropout layers.
-            use_bias (bool)     -- if the conv layer uses bias or not
+            Parameters:
+                dim (int)           -- the number of channels in the conv layer.
+                padding_type (str)  -- the name of padding layer: reflect | replicate | zero
+                norm_layer          -- normalization layer
+                use_dropout (bool)  -- if use dropout layers.
+                use_bias (bool)     -- if the conv layer uses bias or not
 
-        Returns a conv block (with a conv layer, a normalization layer, and a non-linearity layer (ReLU))
+            Returns a conv block (with a conv layer, a normalization layer, and a non-linearity layer (ReLU))
         """
         conv_block = []
         p = 0
@@ -440,16 +500,16 @@ class UnetGenerator(nn.Module):
 
     def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False):
         """Construct a Unet generator
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            output_nc (int) -- the number of channels in output images
-            num_downs (int) -- the number of downsamplings in UNet. For example, # if |num_downs| == 7,
-                                image of size 128x128 will become of size 1x1 # at the bottleneck
-            ngf (int)       -- the number of filters in the last conv layer
-            norm_layer      -- normalization layer
+            Parameters:
+                input_nc (int)  -- the number of channels in input images
+                output_nc (int) -- the number of channels in output images
+                num_downs (int) -- the number of downsamplings in UNet. For example, # if |num_downs| == 7,
+                                    image of size 128x128 will become of size 1x1 # at the bottleneck
+                ngf (int)       -- the number of filters in the last conv layer
+                norm_layer      -- normalization layer
 
-        We construct the U-Net from the innermost layer to the outermost layer.
-        It is a recursive process.
+            We construct the U-Net from the innermost layer to the outermost layer.
+            It is a recursive process.
         """
         super(UnetGenerator, self).__init__()
         # construct unet structure
@@ -477,15 +537,15 @@ class UnetSkipConnectionBlock(nn.Module):
                  submodule=None, outermost=False, innermost=False, norm_layer=nn.BatchNorm2d, use_dropout=False):
         """Construct a Unet submodule with skip connections.
 
-        Parameters:
-            outer_nc (int) -- the number of filters in the outer conv layer
-            inner_nc (int) -- the number of filters in the inner conv layer
-            input_nc (int) -- the number of channels in input images/features
-            submodule (UnetSkipConnectionBlock) -- previously defined submodules
-            outermost (bool)    -- if this module is the outermost module
-            innermost (bool)    -- if this module is the innermost module
-            norm_layer          -- normalization layer
-            use_dropout (bool)  -- if use dropout layers.
+            Parameters:
+                outer_nc (int) -- the number of filters in the outer conv layer
+                inner_nc (int) -- the number of filters in the inner conv layer
+                input_nc (int) -- the number of channels in input images/features
+                submodule (UnetSkipConnectionBlock) -- previously defined submodules
+                outermost (bool)    -- if this module is the outermost module
+                innermost (bool)    -- if this module is the innermost module
+                norm_layer          -- normalization layer
+                use_dropout (bool)  -- if use dropout layers.
         """
         super(UnetSkipConnectionBlock, self).__init__()
         self.outermost = outermost
@@ -543,11 +603,11 @@ class NLayerDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
         """Construct a PatchGAN discriminator
 
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            ndf (int)       -- the number of filters in the last conv layer
-            n_layers (int)  -- the number of conv layers in the discriminator
-            norm_layer      -- normalization layer
+            Parameters:
+                input_nc (int)  -- the number of channels in input images
+                ndf (int)       -- the number of filters in the last conv layer
+                n_layers (int)  -- the number of conv layers in the discriminator
+                norm_layer      -- normalization layer
         """
         super(NLayerDiscriminator, self).__init__()
         if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
@@ -584,34 +644,3 @@ class NLayerDiscriminator(nn.Module):
         """Standard forward."""
         return self.model(input)
 
-
-class PixelDiscriminator(nn.Module):
-    """Defines a 1x1 PatchGAN discriminator (pixelGAN)"""
-
-    def __init__(self, input_nc, ndf=64, norm_layer=nn.BatchNorm2d):
-        """Construct a 1x1 PatchGAN discriminator
-
-        Parameters:
-            input_nc (int)  -- the number of channels in input images
-            ndf (int)       -- the number of filters in the last conv layer
-            norm_layer      -- normalization layer
-        """
-        super(PixelDiscriminator, self).__init__()
-        if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
-            use_bias = norm_layer.func == nn.InstanceNorm2d
-        else:
-            use_bias = norm_layer == nn.InstanceNorm2d
-
-        self.net = [
-            nn.Conv2d(input_nc, ndf, kernel_size=1, stride=1, padding=0),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf, ndf * 2, kernel_size=1, stride=1, padding=0, bias=use_bias),
-            norm_layer(ndf * 2),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf * 2, 1, kernel_size=1, stride=1, padding=0, bias=use_bias)]
-
-        self.net = nn.Sequential(*self.net)
-
-    def forward(self, input):
-        """Standard forward."""
-        return self.net(input)
