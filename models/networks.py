@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+import torch.nn.functional as F
 
 
 ###############################################################################
@@ -150,7 +151,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     if netG == 'resnet_9blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif netG == 'NAS':
-        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
+        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -333,16 +334,16 @@ class NASGenerator(nn.Module):
         mult = 2 ** n_downsampling
     
         # add other layer types with size: [1, 256, 64, 64]
-        layer_types = ['conv_2d', 'linear']
-        self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(layer_types))
-
-        print(f"cell_weights size: {self.cell_weights.size()}")
-        print(f"cell_weights: {self.cell_weights}")
+        self.layer_types = ['conv_2d', 'linear']
+        self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(self.layer_types))
+        self.nr_layer = n_blocks
+        # print(f"cell_weights size: {self.cell_weights.size()}")
+        # print(f"cell_weights: {self.cell_weights}")
 
         layers = []
         for i in range(n_blocks):
-            for layer_type in layer_types
-                layers += self.layer_type_encoder(layer_type, mult*ngf)
+            for layer_type in self.layer_types:
+                layers += [self.layer_type_encoder(layer_type, mult*ngf)]
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
@@ -361,10 +362,10 @@ class NASGenerator(nn.Module):
         self.layers = nn.Sequential(*layers)
         self.upsampling = nn.Sequential(*upsampling)
 
-        #for param in self.downsampling.features.parameters():
+        #for param in self.downsampling.parameters():
         #    param.requires_grad = False
 
-        for param in self.upsampling.features.parameters():
+        for param in self.upsampling.parameters():
             param.requires_grad = False
 
 
@@ -373,6 +374,19 @@ class NASGenerator(nn.Module):
         out = self.downsampling(input)
         #print(f"forward: downsampling size: {out.size()}")
 
+        count = 0
+        values = [out]
+
+
+        for i in range(self.nr_layer):
+            temp_layer_value = torch.zeros(list(out.size()))
+            #temp = temp.to(self.device)
+            for j in range(len(self.layer_types)):
+                print(f"i: {i}, j: {j}")
+                print(f"count: {count}, j: {j}")
+                temp_layer_value = temp_layer_value + self.layers[count+j](values[-1]) * F.softmax(self.cell_weigts, dim=-1)[i, j]
+            values.append(temp_layer_value)
+            count += len(self.layer_types)
 
 
         out = self.upsampling(out)
