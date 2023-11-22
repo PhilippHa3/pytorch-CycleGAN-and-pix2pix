@@ -319,6 +319,8 @@ class NASGenerator(nn.Module):
 
         use_bias = False
 
+        self.module_list = nn.ModuleList()
+
         downsampling = [nn.ReflectionPad2d(3),
                  nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0, bias=use_bias),
                  norm_layer(ngf),
@@ -345,10 +347,10 @@ class NASGenerator(nn.Module):
         cell_weights = cell_weights.to(torch.float64)
         self.cell_weights = nn.Parameter(cell_weights, requires_grad=True)
 
-        layers = []
         for i in range(n_blocks):
             for layer_type in self.layer_types:
-                layers += [self.layer_type_encoder(layer_type, mult*ngf)]
+                self.module_list.append(self.layer_type_encoder(layer_type, mult*ngf))
+                #layers += [self.layer_type_encoder(layer_type, mult*ngf)]
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
@@ -364,14 +366,21 @@ class NASGenerator(nn.Module):
         upsampling += [nn.Tanh()]
 
         self.downsampling = nn.Sequential(*downsampling)
-        self.layers = nn.Sequential(*layers)
+        #self.layers = nn.Sequential(*layers)
         self.upsampling = nn.Sequential(*upsampling)
 
+        for name, param in self.downsampling.named_parameters():
+            print(name)
+        for name, param in self.module_list.named_parameters():
+            print(name)
+        for name, param in self.upsampling.named_parameters():
+            print(name)
+        
         #for param in self.downsampling.parameters():
         #    param.requires_grad = False
 
-        for param in self.upsampling.parameters():
-            param.requires_grad = False
+        #for param in self.upsampling.parameters():
+        #    param.requires_grad = False
 
 
     def forward(self, input):
@@ -382,13 +391,13 @@ class NASGenerator(nn.Module):
         count = 0
         values = [out]
 
-        print("forward call")
+        
 
         for i in range(self.nr_layer):
             temp_layer_value = torch.zeros(list(out.size()))
             temp_layer_value = temp_layer_value.to(self.device)
             for j in range(len(self.layer_types)):
-                temp_layer_value = temp_layer_value + self.layers[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
+                temp_layer_value = temp_layer_value + self.module_list[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
             values.append(temp_layer_value)
             count += len(self.layer_types)
 
