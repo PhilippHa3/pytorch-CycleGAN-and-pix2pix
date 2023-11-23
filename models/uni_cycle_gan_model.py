@@ -75,6 +75,10 @@ class UniCycleGANModel(BaseModel):
         #self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
         #                                not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
+        print("Parameters from netG_A")
+        for parameter in self.netG_A.parameters():
+            print(parameter.data)
+
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
