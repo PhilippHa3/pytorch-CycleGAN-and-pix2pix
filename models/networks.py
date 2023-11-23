@@ -1,5 +1,6 @@
 import torch
-import torch.nn as nn
+# import torch.nn as nn
+from torch import nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
@@ -343,7 +344,7 @@ class NASGenerator(nn.Module):
 
         cell_weights_creation = F.softmax(torch.ones([n_blocks, len(self.layer_types)]), dim=-1)
         cell_weights_creation = cell_weights_creation.to(torch.float64)
-        self.cell_weights = nn.Parameter(cell_weights_creation, requires_grad=True)
+        self.cell_weights = nn.Parameter(torch.Tensor(cell_weights_creation), requires_grad=True)
 
         for i in range(n_blocks):
             for layer_type in self.layer_types:
@@ -374,22 +375,23 @@ class NASGenerator(nn.Module):
         for name, param in self.upsampling.named_parameters():
             print(name)
         
-        #for param in self.downsampling.parameters():
+        # for param in self.downsampling.parameters():
         #    param.requires_grad = False
 
-        #for param in self.upsampling.parameters():
+        # for param in self.module_list.parameters():
+        #    param.requires_grad = False
+
+        # for param in self.upsampling.parameters():
         #    param.requires_grad = False
 
 
     def forward(self, input):
-        #print(f"forward: input size: {input.size()}")
         out = self.downsampling(input)
-        #print(f"forward: downsampling size: {out.size()}")
 
         count = 0
         values = [out]
 
-        
+        print(self.cell_weights)
 
         for i in range(self.nr_layer):
             temp_layer_value = torch.zeros(list(out.size()))

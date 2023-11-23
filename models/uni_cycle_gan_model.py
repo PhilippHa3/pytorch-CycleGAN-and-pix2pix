@@ -75,9 +75,9 @@ class UniCycleGANModel(BaseModel):
         #self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
         #                                not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
 
-        print("Parameters from netG_A")
-        for parameter in self.netG_A.parameters():
-            print(parameter.data)
+        # print("Parameters from netG_A")
+        # for parameter in self.netG_A.parameters():
+        #     print(parameter.data)
 
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
@@ -163,7 +163,7 @@ class UniCycleGANModel(BaseModel):
             self.idt_A = self.netG_A(self.real_B)
             self.loss_idt_A = self.criterionIdt(self.idt_A, self.real_B) * lambda_B * lambda_idt
             # G_B should be identity if real_A is fed: ||G_B(A) - A||
-            #äself.idt_B = self.netG_B(self.real_A)
+            #self.idt_B = self.netG_B(self.real_A)
             #self.loss_idt_B = self.criterionIdt(self.idt_B, self.real_A) * lambda_A * lambda_idt
         else:
             self.loss_idt_A = 0

@@ -47,3 +47,4 @@ wandb/
 
 #virtual enviroment
 .venv
+tests
