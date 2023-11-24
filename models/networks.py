@@ -1,6 +1,6 @@
 import torch
-# import torch.nn as nn
-from torch import nn
+import torch.nn as nn
+# from torch import nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
@@ -415,7 +415,7 @@ class NASGenerator(nn.Module):
                 )
             case 'pool_2d':
                 return nn.Sequential(
-                    nn.MaxPool2d(2, 1, padding=1),
+                    nn.MaxPool2d(3, 1, padding=1),
                     nn.ReLU()
                 )
             case 'linear':
