@@ -309,6 +309,11 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
         return 0.0, None
 
 
+class Cell(nn.Module):
+    def __init__(self, layer_types):
+        super(Cell, self).__init__()
+
+
 class NASGenerator(nn.Module):
     
     def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect'):
@@ -394,6 +399,7 @@ class NASGenerator(nn.Module):
         print(self.cell_weights)
 
         for i in range(self.nr_layer):
+            print(len(values))
             temp_layer_value = torch.zeros(list(out.size()))
             temp_layer_value = temp_layer_value.to(self.device)
             for j in range(len(self.layer_types)):
@@ -402,9 +408,10 @@ class NASGenerator(nn.Module):
             count += len(self.layer_types)
 
 
-        out = self.upsampling(out)
+        out = self.upsampling(values[-1])
         #print(f"forward: upsampling size: {out.size()}")
         return out
+        
         
     def layer_type_encoder(self, layer_type, dim):
         match layer_type:
