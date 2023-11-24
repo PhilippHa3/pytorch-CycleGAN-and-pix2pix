@@ -310,8 +310,50 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
 
 class Cell(nn.Module):
-    def __init__(self, layer_types):
+    def __init__(self, layer_types, nr_layer, weights, dim):
         super(Cell, self).__init__()
+
+        self.module_list = nn.ModuleList()
+        self.cell_weights = weights
+
+        for i in range(nr_layer):
+            for layer_type in layer_types:
+                self.module_list.append(self.layer_type_encoder(layer_type, dim))
+
+    
+    def forward(self, input):
+        values = [input]
+
+        for i in range(self.nr_layer):
+            print(len(values))
+            temp_layer_value = torch.zeros(list(input.size()))
+            temp_layer_value = temp_layer_value.to(self.device)
+            for j in range(len(self.layer_types)):
+                temp_layer_value = temp_layer_value + self.module_list[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
+            values.append(temp_layer_value)
+            count += len(self.layer_types)
+        return values[-1]
+
+
+
+    def layer_type_encoder(self, layer_type, dim):
+        match layer_type:
+            case 'conv_2d':
+                return nn.Sequential(
+                    nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
+                    nn.ReLU()
+                )
+            case 'pool_2d':
+                return nn.Sequential(
+                    nn.MaxPool2d(3, 1, padding=1),
+                    nn.ReLU()
+                )
+            case 'linear':
+                return nn.Sequential(
+                    Resized_Linear(dim, dim, False),
+                    nn.ReLU()
+                )
+
 
 
 class NASGenerator(nn.Module):
@@ -333,7 +375,6 @@ class NASGenerator(nn.Module):
         n_downsampling = 2
         for i in range(n_downsampling):  # add downsampling layers
             mult = 2 ** i
-            # print(f"{i} downsampling with input {ngf*mult} and output {ngf*mult*2}")
             downsampling += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1, bias=use_bias),
                       norm_layer(ngf * mult * 2),
                       nn.ReLU(True)]
@@ -342,19 +383,12 @@ class NASGenerator(nn.Module):
     
         # add other layer types with size: [1, 256, 64, 64]
         self.layer_types = ['conv_2d', 'pool_2d']
-        # self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(self.layer_types))
         self.nr_layer = n_blocks
-        # print(f"cell_weights size: {self.cell_weights.size()}")
-        # print(f"cell_weights: {self.cell_weights}")
 
-        cell_weights_creation = F.softmax(torch.ones([n_blocks, len(self.layer_types)]), dim=-1)
-        cell_weights_creation = cell_weights_creation.to(torch.float64)
-        self.cell_weights = nn.Parameter(torch.Tensor(cell_weights_creation), requires_grad=True)
+        self.cell_weights = self.get_layer_weights(self.nr_layer, len(self.layer_types))
 
         for i in range(n_blocks):
-            for layer_type in self.layer_types:
-                self.module_list.append(self.layer_type_encoder(layer_type, mult*ngf))
-                #layers += [self.layer_type_encoder(layer_type, mult*ngf)]
+            self.module_list.append(Cell(self.layer_types, self.nr_layer, self.cell_weights, mult*ngf))
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
@@ -370,7 +404,6 @@ class NASGenerator(nn.Module):
         upsampling += [nn.Tanh()]
 
         self.downsampling = nn.Sequential(*downsampling)
-        #self.layers = nn.Sequential(*layers)
         self.upsampling = nn.Sequential(*upsampling)
 
         for name, param in self.downsampling.named_parameters():
@@ -379,59 +412,21 @@ class NASGenerator(nn.Module):
             print(name)
         for name, param in self.upsampling.named_parameters():
             print(name)
-        
-        # for param in self.downsampling.parameters():
-        #    param.requires_grad = False
-
-        # for param in self.module_list.parameters():
-        #    param.requires_grad = False
-
-        # for param in self.upsampling.parameters():
-        #    param.requires_grad = False
 
 
     def forward(self, input):
         out = self.downsampling(input)
 
-        count = 0
         values = [out]
 
-        print(self.cell_weights)
-
-        for i in range(self.nr_layer):
-            print(len(values))
-            temp_layer_value = torch.zeros(list(out.size()))
-            temp_layer_value = temp_layer_value.to(self.device)
-            for j in range(len(self.layer_types)):
-                temp_layer_value = temp_layer_value + self.module_list[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
-            values.append(temp_layer_value)
-            count += len(self.layer_types)
-
+        for cell in self.module_list:
+            values.append(cell(values[-1]))
 
         out = self.upsampling(values[-1])
-        #print(f"forward: upsampling size: {out.size()}")
         return out
         
-        
-    def layer_type_encoder(self, layer_type, dim):
-        match layer_type:
-            case 'conv_2d':
-                return nn.Sequential(
-                    nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
-                    nn.ReLU()
-                )
-            case 'pool_2d':
-                return nn.Sequential(
-                    nn.MaxPool2d(3, 1, padding=1),
-                    nn.ReLU()
-                )
-            case 'linear':
-                return nn.Sequential(
-                    Resized_Linear(dim, dim, False),
-                    nn.ReLU()
-                )
 
-    def gen_layer_weights(self, nr_layer, nr_layer_types):
+    def get_layer_weights(self, nr_layer, nr_layer_types):
         cell_weights = F.softmax(torch.ones([nr_layer, nr_layer_types]), dim=-1)
         cell_weights = cell_weights.to(torch.float64)
         cell_weights = nn.Parameter(cell_weights, requires_grad=True)
