@@ -439,7 +439,7 @@ class NASGenerator(nn.Module):
     def get_layer_weights(self, n_blocks, nr_layer_types):
         cell_weights = F.softmax(torch.ones([n_blocks, nr_layer_types]), dim=-1)
         cell_weights = cell_weights.to(torch.float64)
-        cell_weights = nn.Parameter(cell_weights, requires_grad=True)
+        cell_weights = nn.Parameter(cell_weights, requires_grad=False)
         return cell_weights
 
 
