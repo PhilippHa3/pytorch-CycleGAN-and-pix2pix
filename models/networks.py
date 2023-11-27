@@ -309,19 +309,23 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
 
 class Cell(nn.Module):
-    def __init__(self, layer_types, nr_layer, weights, dim):
+    def __init__(self, layer_types, nr_layer, weights, dim, device):
         super(Cell, self).__init__()
 
         self.module_list = nn.ModuleList()
         self.cell_weights = weights
+        self.nr_layer = nr_layer
+        self.device = device
+        self.layer_types = layer_types
 
-        for i in range(nr_layer):
+        for i in range(self.nr_layer):
             for layer_type in layer_types:
                 self.module_list.append(self.layer_type_encoder(layer_type, dim))
 
     
     def forward(self, input):
         values = [input]
+        count = 0
 
         for i in range(self.nr_layer):
             print(len(values))
@@ -388,7 +392,7 @@ class NASGenerator(nn.Module):
         self.cell_weights = self.get_layer_weights(self.n_layers_cell, len(self.layer_types))
 
         for i in range(self.n_blocks):
-            self.module_list.append(Cell(self.layer_types, self.n_layers_cell, self.cell_weights, mult*ngf))
+            self.module_list.append(Cell(self.layer_types, self.n_layers_cell, self.cell_weights, mult*ngf, self.device))
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
