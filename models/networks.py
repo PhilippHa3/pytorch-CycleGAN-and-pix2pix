@@ -341,21 +341,30 @@ class Cell(nn.Module):
 
     def layer_type_encoder(self, layer_type, dim):
         match layer_type:
-            case 'conv_2d':
+            case 'ReflectionPad2d_Conv2d':
                 return nn.Sequential(
+                    nn.ReflectionPad2d(1),
                     nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
-                    nn.ReLU()
+                    # nn.ReLU()
                 )
-            case 'pool_2d':
-                return nn.Sequential(
-                    nn.MaxPool2d(3, 1, padding=1),
-                    nn.ReLU()
-                )
-            case 'linear':
-                return nn.Sequential(
-                    Resized_Linear(dim, dim, False),
-                    nn.ReLU()
-                )
+            case 'Conv2d':
+                return nn.Conv2d(dim, dim, 3, 1, 1)
+            # case 'pool_2d':
+            #     return nn.Sequential(
+            #         nn.MaxPool2d(3, 1, padding=1),
+            #         nn.ReLU()
+            #     )
+            # case 'linear':
+            #     return nn.Sequential(
+            #         Resized_Linear(dim, dim, False),
+            #         nn.ReLU()
+            #     )
+            case 'BatchNorm2d':
+                return nn.BatchNorm2d(dim)
+            case 'InstanceNorm2d':
+                return nn.InstanceNorm2d(dim)
+            case 'ReLU':
+                return nn.ReLU(inplace=True)
 
 
 
@@ -368,7 +377,11 @@ class NASGenerator(nn.Module):
 
         use_bias = False
         self.n_blocks = n_blocks
-        self.layer_types = ['conv_2d', 'pool_2d']
+        ### CycleGAN: Layer types; n_layers_cell: 5
+        self.layer_types = ['ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
+        ### PixelDA: Layer types; n_layers_cell: 5
+        # self.layer_types = ['Conv2d', 'BatchNorm2d', 'ReLU']
+        
         self.n_layers_cell = n_layers_cell
 
         self.module_list = nn.ModuleList()
