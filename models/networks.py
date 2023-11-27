@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-# from torch import nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
@@ -119,7 +118,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], n_layers_cell=5):
     """Create a generator
 
     Parameters:
@@ -152,7 +151,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     if netG == 'resnet_9blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif netG == 'NAS':
-        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3)
+        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, n_layers_cell=n_layers_cell)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -358,12 +357,15 @@ class Cell(nn.Module):
 
 class NASGenerator(nn.Module):
     
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect', n_layers_cell=5):
         assert(n_blocks >= 0)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         super(NASGenerator, self).__init__()
 
         use_bias = False
+        self.n_blocks = n_blocks
+        self.layer_types = ['conv_2d', 'pool_2d']
+        self.n_layers_cell = n_layers_cell
 
         self.module_list = nn.ModuleList()
 
@@ -382,13 +384,11 @@ class NASGenerator(nn.Module):
         mult = 2 ** n_downsampling
     
         # add other layer types with size: [1, 256, 64, 64]
-        self.layer_types = ['conv_2d', 'pool_2d']
-        self.nr_layer = n_blocks
 
-        self.cell_weights = self.get_layer_weights(self.nr_layer, len(self.layer_types))
+        self.cell_weights = self.get_layer_weights(self.n_layers_cell, len(self.layer_types))
 
-        for i in range(n_blocks):
-            self.module_list.append(Cell(self.layer_types, self.nr_layer, self.cell_weights, mult*ngf))
+        for i in range(self.n_blocks):
+            self.module_list.append(Cell(self.layer_types, self.n_layers_cell, self.cell_weights, mult*ngf))
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
@@ -406,13 +406,6 @@ class NASGenerator(nn.Module):
         self.downsampling = nn.Sequential(*downsampling)
         self.upsampling = nn.Sequential(*upsampling)
 
-        for name, param in self.downsampling.named_parameters():
-            print(name)
-        for name, param in self.module_list.named_parameters():
-            print(name)
-        for name, param in self.upsampling.named_parameters():
-            print(name)
-
 
     def forward(self, input):
         out = self.downsampling(input)
@@ -426,8 +419,8 @@ class NASGenerator(nn.Module):
         return out
         
 
-    def get_layer_weights(self, nr_layer, nr_layer_types):
-        cell_weights = F.softmax(torch.ones([nr_layer, nr_layer_types]), dim=-1)
+    def get_layer_weights(self, n_blocks, nr_layer_types):
+        cell_weights = F.softmax(torch.ones([n_blocks, nr_layer_types]), dim=-1)
         cell_weights = cell_weights.to(torch.float64)
         cell_weights = nn.Parameter(cell_weights, requires_grad=True)
         return cell_weights
