@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-# from torch import nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
@@ -119,7 +118,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], n_layers_cell=5):
     """Create a generator
 
     Parameters:
@@ -152,7 +151,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     if netG == 'resnet_9blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
     elif netG == 'NAS':
-        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3)
+        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, n_layers_cell=n_layers_cell)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -310,18 +309,80 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
 
 class Cell(nn.Module):
-    def __init__(self, layer_types):
+    def __init__(self, layer_types, nr_layer, weights, dim, device):
         super(Cell, self).__init__()
+
+        self.module_list = nn.ModuleList()
+        self.cell_weights = weights
+        self.nr_layer = nr_layer
+        self.device = device
+        self.layer_types = layer_types
+
+        for i in range(self.nr_layer):
+            for layer_type in layer_types:
+                self.module_list.append(self.layer_type_encoder(layer_type, dim))
+
+    
+    def forward(self, input):
+        values = [input]
+        count = 0
+
+        for i in range(self.nr_layer):
+            print(len(values))
+            temp_layer_value = torch.zeros(list(input.size()))
+            temp_layer_value = temp_layer_value.to(self.device)
+            for j in range(len(self.layer_types)):
+                temp_layer_value = temp_layer_value + self.module_list[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
+            values.append(temp_layer_value)
+            count += len(self.layer_types)
+        return values[-1]
+
+
+
+    def layer_type_encoder(self, layer_type, dim):
+        match layer_type:
+            case 'ReflectionPad2d_Conv2d':
+                return nn.Sequential(
+                    nn.ReflectionPad2d(1),
+                    nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
+                    # nn.ReLU()
+                )
+            case 'Conv2d':
+                return nn.Conv2d(dim, dim, 3, 1, 1)
+            # case 'pool_2d':
+            #     return nn.Sequential(
+            #         nn.MaxPool2d(3, 1, padding=1),
+            #         nn.ReLU()
+            #     )
+            # case 'linear':
+            #     return nn.Sequential(
+            #         Resized_Linear(dim, dim, False),
+            #         nn.ReLU()
+            #     )
+            case 'BatchNorm2d':
+                return nn.BatchNorm2d(dim)
+            case 'InstanceNorm2d':
+                return nn.InstanceNorm2d(dim)
+            case 'ReLU':
+                return nn.ReLU(inplace=True)
+
 
 
 class NASGenerator(nn.Module):
     
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect', n_layers_cell=5):
         assert(n_blocks >= 0)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         super(NASGenerator, self).__init__()
 
         use_bias = False
+        self.n_blocks = n_blocks
+        ### CycleGAN: Layer types; n_layers_cell: 5
+        self.layer_types = ['ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
+        ### PixelDA: Layer types; n_layers_cell: 5
+        # self.layer_types = ['Conv2d', 'BatchNorm2d', 'ReLU']
+        
+        self.n_layers_cell = n_layers_cell
 
         self.module_list = nn.ModuleList()
 
@@ -333,7 +394,6 @@ class NASGenerator(nn.Module):
         n_downsampling = 2
         for i in range(n_downsampling):  # add downsampling layers
             mult = 2 ** i
-            # print(f"{i} downsampling with input {ngf*mult} and output {ngf*mult*2}")
             downsampling += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1, bias=use_bias),
                       norm_layer(ngf * mult * 2),
                       nn.ReLU(True)]
@@ -341,20 +401,11 @@ class NASGenerator(nn.Module):
         mult = 2 ** n_downsampling
     
         # add other layer types with size: [1, 256, 64, 64]
-        self.layer_types = ['conv_2d', 'pool_2d']
-        # self.cell_weights = self.gen_layer_weights(nr_layer=n_blocks, nr_layer_types=len(self.layer_types))
-        self.nr_layer = n_blocks
-        # print(f"cell_weights size: {self.cell_weights.size()}")
-        # print(f"cell_weights: {self.cell_weights}")
 
-        cell_weights_creation = F.softmax(torch.ones([n_blocks, len(self.layer_types)]), dim=-1)
-        cell_weights_creation = cell_weights_creation.to(torch.float64)
-        self.cell_weights = nn.Parameter(torch.Tensor(cell_weights_creation), requires_grad=True)
+        self.cell_weights = self.get_layer_weights(self.n_layers_cell, len(self.layer_types))
 
-        for i in range(n_blocks):
-            for layer_type in self.layer_types:
-                self.module_list.append(self.layer_type_encoder(layer_type, mult*ngf))
-                #layers += [self.layer_type_encoder(layer_type, mult*ngf)]
+        for i in range(self.n_blocks):
+            self.module_list.append(Cell(self.layer_types, self.n_layers_cell, self.cell_weights, mult*ngf, self.device))
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
@@ -370,71 +421,25 @@ class NASGenerator(nn.Module):
         upsampling += [nn.Tanh()]
 
         self.downsampling = nn.Sequential(*downsampling)
-        #self.layers = nn.Sequential(*layers)
         self.upsampling = nn.Sequential(*upsampling)
-
-        for name, param in self.downsampling.named_parameters():
-            print(name)
-        for name, param in self.module_list.named_parameters():
-            print(name)
-        for name, param in self.upsampling.named_parameters():
-            print(name)
-        
-        # for param in self.downsampling.parameters():
-        #    param.requires_grad = False
-
-        # for param in self.module_list.parameters():
-        #    param.requires_grad = False
-
-        # for param in self.upsampling.parameters():
-        #    param.requires_grad = False
 
 
     def forward(self, input):
         out = self.downsampling(input)
 
-        count = 0
         values = [out]
 
-        print(self.cell_weights)
-
-        for i in range(self.nr_layer):
-            print(len(values))
-            temp_layer_value = torch.zeros(list(out.size()))
-            temp_layer_value = temp_layer_value.to(self.device)
-            for j in range(len(self.layer_types)):
-                temp_layer_value = temp_layer_value + self.module_list[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
-            values.append(temp_layer_value)
-            count += len(self.layer_types)
-
+        for cell in self.module_list:
+            values.append(cell(values[-1]))
 
         out = self.upsampling(values[-1])
-        #print(f"forward: upsampling size: {out.size()}")
         return out
         
-        
-    def layer_type_encoder(self, layer_type, dim):
-        match layer_type:
-            case 'conv_2d':
-                return nn.Sequential(
-                    nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
-                    nn.ReLU()
-                )
-            case 'pool_2d':
-                return nn.Sequential(
-                    nn.MaxPool2d(3, 1, padding=1),
-                    nn.ReLU()
-                )
-            case 'linear':
-                return nn.Sequential(
-                    Resized_Linear(dim, dim, False),
-                    nn.ReLU()
-                )
 
-    def gen_layer_weights(self, nr_layer, nr_layer_types):
-        cell_weights = F.softmax(torch.ones([nr_layer, nr_layer_types]), dim=-1)
+    def get_layer_weights(self, n_blocks, nr_layer_types):
+        cell_weights = F.softmax(torch.ones([n_blocks, nr_layer_types]), dim=-1)
         cell_weights = cell_weights.to(torch.float64)
-        cell_weights = nn.Parameter(cell_weights, requires_grad=True)
+        cell_weights = nn.Parameter(cell_weights, requires_grad=False)
         return cell_weights
 
 
