@@ -118,7 +118,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], n_layers_cell=5):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], n_layers_cell=5, layer_types='CycleGan'):
     """Create a generator
 
     Parameters:
@@ -153,7 +153,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'resnet_6blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
     elif netG == 'NAS':
-        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, n_layers_cell=n_layers_cell)
+        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, n_layers_cell=n_layers_cell, layer_types=layer_types)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -348,6 +348,12 @@ class Cell(nn.Module):
                     nn.Conv2d(dim, dim, kernel_size=3, bias=False),
                     # nn.ReLU()
                 )
+            case 'ReflectionPad2d_Conv2d+ReLU':
+                return nn.Sequential(
+                    nn.ReflectionPad2d(1),
+                    nn.Conv2d(dim, dim, kernel_size=3, bias=False),
+                    nn.ReLU()
+                )
             case 'Conv2d':
                 return nn.Conv2d(dim, dim, 3, 1, 1)
             # case 'pool_2d':
@@ -371,7 +377,7 @@ class Cell(nn.Module):
 
 class NASGenerator(nn.Module):
     
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect', n_layers_cell=5):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect', n_layers_cell=5, layer_types='CycleGan'):
         assert(n_blocks >= 0)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         super(NASGenerator, self).__init__()
@@ -379,9 +385,13 @@ class NASGenerator(nn.Module):
         use_bias = False
         self.n_blocks = n_blocks
         ### CycleGAN: Layer types; n_layers_cell: 5
-        self.layer_types = ['ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
+        if layer_types == 'CycleGan':
+            self.layer_types = ['ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
         ### PixelDA: Layer types; n_layers_cell: 5
-        # self.layer_types = ['Conv2d', 'BatchNorm2d', 'ReLU']
+        elif layer_types == 'PixelDa':
+            self.layer_types = ['Conv2d', 'BatchNorm2d', 'ReLU']
+        elif layer_types == 'CycleGan+ReLU':
+            self.layer_types = ['ReflectionPad2d_Conv2d+ReLU', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
         
         self.n_layers_cell = n_layers_cell
 

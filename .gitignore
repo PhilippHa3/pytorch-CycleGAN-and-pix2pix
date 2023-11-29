@@ -48,3 +48,4 @@ wandb/
 #virtual enviroment
 .venv
 tests
+saved_cell_weights/*
