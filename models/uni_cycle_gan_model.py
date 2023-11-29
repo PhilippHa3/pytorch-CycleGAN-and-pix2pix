@@ -205,8 +205,14 @@ class UniCycleGANModel(BaseModel):
         return  cell_netG_A, cell_netG_B
 
     def get_model_cell_weights(self):
-        cell_netG_A = self.netG_A.cell_weights
-        cell_netG_B = self.netG_B.cell_weights
+        for name, params in self.netG_A.named_parameters():
+            if name == 'cell_weights':
+                cell_netG_A = params
+        for name, params in self.netG_B.named_parameters():
+            if name == 'cell_weights':
+                cell_netG_B = params
+        # cell_netG_A = self.netG_A.cell_weights
+        # cell_netG_B = self.netG_B.cell_weights
         cell_netG_A = F.softmax(cell_netG_A, dim=-1)
         cell_netG_B = F.softmax(cell_netG_B, dim=-1)
         return cell_netG_A, cell_netG_B # {'cell_netG_A': cell_netG_A, 'cell_netG_B': cell_netG_B}
