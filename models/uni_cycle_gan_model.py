@@ -195,8 +195,10 @@ class UniCycleGANModel(BaseModel):
         self.optimizer_D.step()  # update D_A and D_B's weights
 
     def get_model_cell_weights(self):
-        cell_netG_A = self.netG_A.cell_weights
-        cell_netG_B = self.netG_B.cell_weights
-        cell_netG_A = F.softmax(cell_netG_A)
-        cell_netG_B = F.softmax(cell_netG_B)
-        return cell_netG_A, cell_netG_B # {'cell_netG_A': cell_netG_A, 'cell_netG_B': cell_netG_B}
+        if self.opt.netG == "NAS":
+            cell_netG_A = self.netG_A.cell_weights
+            cell_netG_B = self.netG_B.cell_weights
+            cell_netG_A = F.softmax(cell_netG_A, dim=-1)
+            cell_netG_B = F.softmax(cell_netG_B, dim=-1)
+            return cell_netG_A, cell_netG_B # {'cell_netG_A': cell_netG_A, 'cell_netG_B': cell_netG_B}
+        return None, None

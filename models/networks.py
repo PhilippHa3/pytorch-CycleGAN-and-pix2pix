@@ -328,7 +328,6 @@ class Cell(nn.Module):
         count = 0
 
         for i in range(self.nr_layer):
-            print(len(values))
             temp_layer_value = torch.zeros(list(input.size()))
             temp_layer_value = temp_layer_value.to(self.device)
             for j in range(len(self.layer_types)):
@@ -344,7 +343,7 @@ class Cell(nn.Module):
             case 'ReflectionPad2d_Conv2d':
                 return nn.Sequential(
                     nn.ReflectionPad2d(1),
-                    nn.Conv2d(dim, dim, kernel_size=3, padding='same', bias=False),
+                    nn.Conv2d(dim, dim, kernel_size=3, bias=False),
                     # nn.ReLU()
                 )
             case 'Conv2d':

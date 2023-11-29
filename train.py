@@ -53,7 +53,6 @@ if __name__ == '__main__':
         cell_netG_A, cell_netG_B = model.get_model_cell_weights() # save cell weights 
         cell_weights['cell_netG_A'].append(cell_netG_A)
         cell_weights['cell_netG_B'].append(cell_netG_B)
-        print(cell_weights)
         for i, data in enumerate(dataset):  # inner loop within one epoch
             iter_start_time = time.time()  # timer for computation per iteration
             if total_iters % opt.print_freq == 0:
