@@ -38,6 +38,8 @@ if __name__ == '__main__':
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
 
+    cell_weights = {'cell_netG_A': [], 'cell_netG_B': []}
+
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         if epoch == cell_train_start:
             for name, param in model.named_parameters():
@@ -48,6 +50,10 @@ if __name__ == '__main__':
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
         model.update_learning_rate()    # update learning rates in the beginning of every epoch.
+        cell_netG_A, cell_netG_B = model.get_model_cell_weights() # save cell weights 
+        cell_weights['cell_netG_A'].append(cell_netG_A)
+        cell_weights['cell_netG_B'].append(cell_netG_B)
+        print(cell_weights)
         for i, data in enumerate(dataset):  # inner loop within one epoch
             iter_start_time = time.time()  # timer for computation per iteration
             if total_iters % opt.print_freq == 0:
@@ -82,3 +88,6 @@ if __name__ == '__main__':
             model.save_networks(epoch)
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
+    print(f"cell_weights: {cell_weights}")
+    with open('cell_weights.txt', 'w') as file:
+        file.write(cell_weights)

@@ -3,6 +3,7 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
+import torch.nn.functional as F
 
 
 class UniCycleGANModel(BaseModel):
@@ -192,3 +193,10 @@ class UniCycleGANModel(BaseModel):
         self.backward_D_A()      # calculate gradients for D_A
         self.backward_D_B()      # calculate graidents for D_B
         self.optimizer_D.step()  # update D_A and D_B's weights
+
+    def get_model_cell_weights(self):
+        cell_netG_A = self.netG_A.cell_weights
+        cell_netG_B = self.netG_B.cell_weights
+        cell_netG_A = F.softmax(cell_netG_A)
+        cell_netG_B = F.softmax(cell_netG_B)
+        return cell_netG_A, cell_netG_B # {'cell_netG_A': cell_netG_A, 'cell_netG_B': cell_netG_B}
