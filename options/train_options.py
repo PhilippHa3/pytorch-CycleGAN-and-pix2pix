@@ -36,6 +36,7 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
         parser.add_argument('--cell_train_start', type=int, default=50, help='epoch when the cell architecture starts training')
+        parser.add_argument('--train_name', type=str, default='no_name', help='the name the saved cell_weights file gets')
 
         self.isTrain = True
         return parser
