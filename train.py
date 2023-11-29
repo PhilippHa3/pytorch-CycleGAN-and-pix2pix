@@ -42,9 +42,12 @@ if __name__ == '__main__':
 
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):    # outer loop for different epochs; we save the model by <epoch_count>, <epoch_count>+<save_latest_freq>
         if epoch == cell_train_start:
-            for name, param in model.named_parameters():
-                if name == 'cell_weights':
-                    param.requires_grad = True
+            netG_A, netG_B = model.return_cell_weights()
+            netG_A.requires_grad = True
+            netG_B.requires_grad = True
+            #for name, param in model.named_parameters():
+            #    if name == 'cell_weights':
+            #        param.requires_grad = True
         epoch_start_time = time.time()  # timer for entire epoch
         iter_data_time = time.time()    # timer for data loading per iteration
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch

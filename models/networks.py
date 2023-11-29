@@ -365,7 +365,7 @@ class Cell(nn.Module):
             case 'InstanceNorm2d':
                 return nn.InstanceNorm2d(dim)
             case 'ReLU':
-                return nn.ReLU(inplace=True)
+                return nn.ReLU()
 
 
 
