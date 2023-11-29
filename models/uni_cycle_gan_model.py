@@ -197,19 +197,20 @@ class UniCycleGANModel(BaseModel):
     def return_cell_weights(self):
         cell_netG_A, cell_netG_B = None, None
         for name, params in self.netG_A.named_parameters():
-            if name == 'cell_weights':
+            if name == 'module.cell_weights' or name == 'cell_weights':
                 cell_netG_A = params
         for name, params in self.netG_B.named_parameters():
-            if name == 'cell_weights':
+            if name == 'module.cell_weights' or name == 'cell_weights':
                 cell_netG_B = params
         return  cell_netG_A, cell_netG_B
 
     def get_model_cell_weights(self):
         for name, params in self.netG_A.named_parameters():
-            if name == 'cell_weights':
+            print(name)
+            if name == 'module.cell_weights' or name == 'cell_weights':
                 cell_netG_A = params
         for name, params in self.netG_B.named_parameters():
-            if name == 'cell_weights':
+            if name == 'module.cell_weights' or name == 'cell_weights':
                 cell_netG_B = params
         # cell_netG_A = self.netG_A.cell_weights
         # cell_netG_B = self.netG_B.cell_weights
