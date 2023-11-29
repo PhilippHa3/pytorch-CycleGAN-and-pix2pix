@@ -91,5 +91,5 @@ if __name__ == '__main__':
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
     print(f"cell_weights: {cell_weights}")
-    with open('cell_weights.txt', 'w') as file:
-        file.write(cell_weights)
+    with open(f'{int(time.time())}_cell_weights.txt', 'w') as file:
+        file.write(str(cell_weights))
