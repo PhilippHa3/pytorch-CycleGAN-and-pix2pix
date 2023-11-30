@@ -359,7 +359,7 @@ class Cell(nn.Module):
             case 'Conv2d+ReLU':
                 return nn.Sequential(
                     nn.Conv2d(dim, dim, 3, 1, 1),
-                    nn.ReLu()
+                    nn.ReLU()
                     )
             # case 'pool_2d':
             #     return nn.Sequential(
