@@ -39,6 +39,7 @@ class BaseOptions():
         parser.add_argument('--init_gain', type=float, default=0.02, help='scaling factor for normal, xavier and orthogonal.')
         parser.add_argument('--no_dropout', action='store_true', help='no dropout for the generator')
         parser.add_argument('--layer_types', type=str, default='CycleGan', help='select layer types [CycleGan|PixelDa|CycleGan+ReLU]')
+        parser.add_argument('--skip_connection', type=bool, default=False, help='if the trained cell has skip connections or not')
         # dataset parameters
         parser.add_argument('--dataset_mode', type=str, default='unaligned', help='chooses how datasets are loaded. [unaligned | aligned | single | colorization]')
         parser.add_argument('--direction', type=str, default='AtoB', help='AtoB or BtoA')

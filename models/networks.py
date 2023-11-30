@@ -118,7 +118,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], n_layers_cell=5, layer_types='CycleGan'):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], n_layers_cell=5, layer_types='CycleGan', skip_connection=False):
     """Create a generator
 
     Parameters:
@@ -153,7 +153,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'resnet_6blocks':
         net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
     elif netG == 'NAS':
-        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, n_layers_cell=n_layers_cell, layer_types=layer_types)
+        net = NASGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3, n_layers_cell=n_layers_cell, layer_types=layer_types, skip_connection=skip_connection)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -311,7 +311,7 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
 
 class Cell(nn.Module):
-    def __init__(self, layer_types, nr_layer, weights, dim, device):
+    def __init__(self, layer_types, nr_layer, weights, dim, device, skip_connection):
         super(Cell, self).__init__()
 
         self.module_list = nn.ModuleList()
@@ -319,6 +319,7 @@ class Cell(nn.Module):
         self.nr_layer = nr_layer
         self.device = device
         self.layer_types = layer_types
+        self.skip_connection = skip_connection
 
         for i in range(self.nr_layer):
             for layer_type in layer_types:
@@ -336,7 +337,9 @@ class Cell(nn.Module):
                 temp_layer_value = temp_layer_value + self.module_list[count+j](values[-1]) * F.softmax(self.cell_weights, dim=-1)[i, j]
             values.append(temp_layer_value)
             count += len(self.layer_types)
-        return values[-1]
+        
+        out = values[-1] + input if self.skip_connection else values[-1]
+        return out
 
 
 
@@ -382,7 +385,7 @@ class Cell(nn.Module):
 
 class NASGenerator(nn.Module):
     
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect', n_layers_cell=5, layer_types='CycleGan'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=3, padding_type='reflect', n_layers_cell=5, layer_types='CycleGan', skip_connection=False):
         assert(n_blocks >= 0)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         super(NASGenerator, self).__init__()
@@ -425,7 +428,7 @@ class NASGenerator(nn.Module):
         self.cell_weights = self.get_layer_weights(self.n_layers_cell, len(self.layer_types))
 
         for i in range(self.n_blocks):
-            self.module_list.append(Cell(self.layer_types, self.n_layers_cell, self.cell_weights, mult*ngf, self.device))
+            self.module_list.append(Cell(self.layer_types, self.n_layers_cell, self.cell_weights, mult*ngf, self.device, skip_connection))
 
         upsampling = []
         for i in range(n_downsampling):  # add upsampling layers
