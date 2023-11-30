@@ -356,6 +356,11 @@ class Cell(nn.Module):
                 )
             case 'Conv2d':
                 return nn.Conv2d(dim, dim, 3, 1, 1)
+            case 'Conv2d+ReLU':
+                return nn.Sequential(
+                    nn.Conv2d(dim, dim, 3, 1, 1),
+                    nn.ReLu()
+                    )
             # case 'pool_2d':
             #     return nn.Sequential(
             #         nn.MaxPool2d(3, 1, padding=1),
@@ -392,6 +397,10 @@ class NASGenerator(nn.Module):
             self.layer_types = ['Conv2d', 'BatchNorm2d', 'ReLU']
         elif layer_types == 'CycleGan+ReLU':
             self.layer_types = ['ReflectionPad2d_Conv2d+ReLU', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
+        elif layer_types == 'PixelDa+ReLU':
+            self.layer_types = ['Conv2d+ReLU', 'BatchNorm2d']
+        elif layer_types == 'all_layers':
+            self.layer_types = ['ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU', 'Conv2d', 'ReflectionPad2d_Conv2d+ReLU', 'Conv2d+ReLU']
         
         self.n_layers_cell = n_layers_cell
 
