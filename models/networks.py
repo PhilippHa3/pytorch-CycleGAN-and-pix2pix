@@ -404,7 +404,10 @@ class NASGenerator(nn.Module):
             self.layer_types = ['Conv2d+ReLU', 'BatchNorm2d']
         elif layer_types == 'all_layers':
             self.layer_types = ['ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU', 'Conv2d', 'ReflectionPad2d_Conv2d+ReLU', 'Conv2d+ReLU']
-        
+        elif layer_types == 'CycleGan+ReLU+Conv':
+            self.layer_types = ['ReflectionPad2d_Conv2d+ReLU', 'ReflectionPad2d_Conv2d', 'BatchNorm2d', 'InstanceNorm2d', 'ReLU']
+
+
         self.n_layers_cell = n_layers_cell
 
         self.module_list = nn.ModuleList()
