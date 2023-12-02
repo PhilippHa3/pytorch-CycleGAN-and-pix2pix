@@ -72,9 +72,9 @@ class UniCycleGANModel(BaseModel):
         # The naming is different from those used in the paper.
         # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
         self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, opt.n_layers_cell, opt.layer_types, opt.skip_connection)
+                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, opt.n_layers_cell, opt.layer_types, opt.skip_connection, opt.n_blocks)
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
-                                       not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, opt.n_layers_cell, opt.layer_types, opt.skip_connection)
+                                       not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, opt.n_layers_cell, opt.layer_types, opt.skip_connection, opt.n_blocks)
 
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,

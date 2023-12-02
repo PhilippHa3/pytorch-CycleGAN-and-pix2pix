@@ -40,6 +40,7 @@ class BaseOptions():
         parser.add_argument('--no_dropout', action='store_true', help='no dropout for the generator')
         parser.add_argument('--layer_types', type=str, default='CycleGan', help='select layer types [CycleGan|PixelDa|CycleGan+ReLU|PixelDa+ReLU|all_layers|CycleGan+ReLU+Conv|CycleGan+ReLU+Pool|ReflectionPad2d_Conv2d]')
         parser.add_argument('--skip_connection', type=bool, default=False, help='if the trained cell has skip connections or not')
+        parser.add_argument('--n_blocks', type=int, default=6, help='the number of cells that are that are run behind each other')
         # dataset parameters
         parser.add_argument('--dataset_mode', type=str, default='unaligned', help='chooses how datasets are loaded. [unaligned | aligned | single | colorization]')
         parser.add_argument('--direction', type=str, default='AtoB', help='AtoB or BtoA')
